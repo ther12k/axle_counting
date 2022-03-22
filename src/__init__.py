@@ -9,8 +9,12 @@ from pathlib import Path
 from itertools import chain
 from src.app import TiresDetection
 from motpy import Detection, MultiObjectTracker
-from config import ID_DEVICE, GATE, IP_API, END_POINT
 from .utils import logging, draw_rectangle, datetime_format, sending_file
+
+from config import DEVICE_ID, GATE_ID, END_POINT,DATETIME_FORMAT,DELAY_IN_SECONDS,SEND_TIMEOUT,READ_TIMEOUT
+import requests
+import datetime
+from requests.exceptions import HTTPError
 
 class MainProcess:
 	'''
@@ -48,65 +52,89 @@ class MainProcess:
 				extract_result(results=results, min_confidence=threshold)
 		return result
 	
-	def __save_and_sending_file(self, file, id_file):
-		'''
-			Send image to server
-			Args:
-				file_path(str): path of image
-			Return:
+	# def __save_and_sending_file(self, file, id_file):
+	# 	'''
+	# 		Send image to server
+	# 		Args:
+	# 			file_path(str): path of image
+	# 		Return:
 				
-		'''
-		# Save File
-		year, month, day, hour, _, _,_ = datetime_format()
-		save_path = f'results/{year}/{month}/{day}/{hour}'
-		Path(save_path).mkdir(parents=True, exist_ok=True)
+	# 	'''
+	# 	# Save File
+	# 	year, month, day, hour, _, _,_ = datetime_format()
+	# 	save_path = f'results/{year}/{month}/{day}/{hour}'
+	# 	Path(save_path).mkdir(parents=True, exist_ok=True)
 		
-		file_name   = f'{id_file}.jpg'
-		path_image  = f'{save_path}/{file_name}'
-		cv2.imwrite(f'{path_image}', file)
+	# 	file_name   = f'{id_file}.jpg'
+	# 	path_image  = f'{save_path}/{file_name}'
+	# 	cv2.imwrite(f'{path_image}', file)
 		
-		# Send file to FTP server
-		server_path = f'{GATE}/{ID_DEVICE}/{year}-{month}-{day}_{hour}'
-		sender = sending_file(file_name=file_name, server_path=server_path)
-		if sender:
-			os.remove(path_image)
+	# 	# Send file to FTP server
+	# 	server_path = f'{GATE}/{ID_DEVICE}/{year}-{month}-{day}_{hour}'
+	# 	sender = sending_file(file_name=file_name, server_path=server_path)
+	# 	if sender:
+	# 		os.remove(path_image)
 			
-		return server_path
+	# 	return server_path
 	
-	@staticmethod
-	def __send_api(server_path, start_time, end_time):
+	# @staticmethod
+	# def __send_api(server_path, start_time, end_time):
 		
-		#send json to API
-		result_json = {
-			'gateId'    : GATE,
-			'deviceId'  : ID_DEVICE,
-			'result'    : 0,
-			'box'       : 
-				{
-				'x_min': 10,
-				'y_min': 11,
-				'x_max': 12,
-				'y_max': 13
-			},
-			'filePath'  : server_path,
-			'startTime' : datetime.fromtimestamp(start_time),
-			'endTime'   : datetime.fromtimestamp(end_time),
-			'delayInSeconds' : 2
+	# 	#send json to API
+	# 	result_json = {
+	# 		'gateId'    : GATE,
+	# 		'deviceId'  : ID_DEVICE,
+	# 		'result'    : 0,
+	# 		'box'       : 
+	# 			{
+	# 			'x_min': 10,
+	# 			'y_min': 11,
+	# 			'x_max': 12,
+	# 			'y_max': 13
+	# 		},
+	# 		'filePath'  : server_path,
+	# 		'startTime' : datetime.fromtimestamp(start_time),
+	# 		'endTime'   : datetime.fromtimestamp(end_time),
+	# 		'delayInSeconds' : 2
 			
-		}
-		response = requests.post(url = f'{IP_API}/{END_POINT}', data = result_json)
-		print(response)
+	# 	}
+	# 	response = requests.post(url = f'{IP_API}/{END_POINT}', data = result_json)
+	# 	print(response)
+	# 	try:
+	# 		if response.status_code() == 200:
+	# 			logging.info(f'Send API success')
+	# 			return True
+	# 	except:
+	# 		logging.error('Cannot send data to API')
+	# 		return False
+
+	def send_data(self,result, file_path, start_time, end_time): 
 		try:
-			if response.status_code() == 200:
-				logging.info(f'Send API success')
-				return True
+			url= END_POINT+'axle/'
+			print(url)
+			json_data = {
+				'gateId': GATE_ID,
+				'deviceId': 'axle'+DEVICE_ID,
+				'result': result,
+				'filePath': file_path,
+				'startTime': start_time.strftime(DATETIME_FORMAT),
+				'EndTime': end_time.strftime(DATETIME_FORMAT),
+				'delayInSeconds' : DELAY_IN_SECONDS,
+			}
+			logging.info(json_data)
+			headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+			r = requests.post(url=url,json=json_data,headers=headers,timeout=(SEND_TIMEOUT,READ_TIMEOUT))
+			logging.info(r)
+			ret = r.json()
+			return ret
+		except HTTPError as e:
+			logging.info(e.response.text)
 		except:
-			logging.error('Cannot send data to API')
-			return False
+			logging.info('send error')
+			return 'send error'
 		
-	def main(self, image, id=None):
+	def main(self, image, start_time,file_path):
 		image_ori = image.copy()
-		if not id: id = int(time.time())
 
 		# Detection tires
 		result = self.__detection(image, size=360, threshold=0.68)
@@ -143,4 +171,7 @@ class MainProcess:
 		# # send data to API
 		# try: self.__send_api(server_path, start_time=id, end_time=id)
 		# except: pass
+		end_time = datetime.datetime.now()
+		#is it self.count
+		self.send_data(self.count,file_path,start_time,end_time)
 		return image_ori
