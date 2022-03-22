@@ -39,11 +39,9 @@ class RunApplication:
 			ftp_conn.mkd(dir)
 		ftp_conn.cwd(dir)
 
-	def video_upload(self,time_id):
+	def video_upload(self,dest_path,name):
 		try:
-			name = time_id.strftime(TIMEID_FORMAT)[:-4]
-			year, month, day, hour, _, _,_ = datetime_format()
-			dest_path = f'/{GATE_ID}/{year}/{month}/{day}/'
+			
 			"""Transfer file to FTP."""
 			# Connect
 			session = ftplib.FTP(FTP_HOST, USER_NAME, USER_PASSWD)
@@ -83,6 +81,11 @@ class RunApplication:
 				time_now = datetime.now()
 				self.adam.di_output(DigitalOutput(array=[0,1,0,0,0,0]))
 				out_video =  self.__write_video(time_now)
+
+				name = time_now.strftime(TIMEID_FORMAT)[:-4]
+				year, month, day, hour, _, _,_ = datetime_format()
+				dest_path = f'/{GATE_ID}/{year}/{month}/{day}/'
+				file_path = dest_path+name+'.avi'
 				while True:
 					adam_inputs = self.adam.di_inputs()
 					A1, A2 = adam_inputs[0][1], adam_inputs[1][1]
@@ -94,9 +97,6 @@ class RunApplication:
 						time.sleep(1)
 						continue
 					else:
-						file_path = self.video_upload(time_now)
-						if 'error' in file_path :
-							file_path=''
 						drawed = self.app.main(frame,time_now,file_path)
 						out_video.write(drawed)
 						#resized = cv2.resize(frame, (480, 720), interpolation = cv2.INTER_AREA)
@@ -108,6 +108,7 @@ class RunApplication:
 						break
 					self.prev_A1==A1
 				out_video.release()
+				self.video_upload(dest_path,name)
 		self.camera.release()
 
 if __name__ == '__main__':
